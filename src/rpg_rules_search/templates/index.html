@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Arquivo Arcano</title>
+  <link rel="stylesheet" href="/static/app.css?v=20260801-9">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Arquivo Arcano, início">
+      <span class="brand-mark" aria-hidden="true">AA</span>
+      <span>Arquivo Arcano</span>
+    </a>
+    <div class="topbar-actions">
+      <button type="button" class="source-state" id="source-button">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="source-label">Pasta não configurada</span>
+      </button>
+      <a class="profile-link" href="/profile" aria-label="Abrir meu perfil">
+        <span class="profile-link-mark" aria-hidden="true">EU</span>
+        <span>Perfil</span>
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <section class="search-shell" aria-labelledby="search-title">
+      <div class="intro">
+        <p class="eyebrow">Biblioteca local de regras</p>
+        <h1 id="search-title">Encontre a regra. Confira a página.</h1>
+        <p>Pesquise poderes, atributos, mecânicas, fichas de ameaças e símbolos nos livros do Drive ou de uma pasta local.</p>
+      </div>
+
+      <form id="search-form" role="search">
+        <div class="mode-tabs" aria-label="Modo de busca">
+          <button type="button" class="mode active" data-mode="text" aria-pressed="true">Texto</button>
+          <button type="button" class="mode" data-mode="question" aria-pressed="false">Pergunta</button>
+          <button type="button" class="mode" data-mode="threats" aria-pressed="false">Ameaças</button>
+          <button type="button" class="mode" data-mode="images" aria-pressed="false">Ícone</button>
+        </div>
+        <div class="search-options" id="threat-options" hidden>
+          <label for="threat-category">Categoria</label>
+          <select id="threat-category">
+            <option value="">Todas as fichas de ameaças</option>
+            <option value="Ameaça da Realidade">Ameaças da Realidade</option>
+            <option value="Ameaça">Outras ameaças</option>
+          </select>
+        </div>
+        <div class="search-options" id="image-options" hidden>
+          <div id="image-upload-form" class="image-upload">
+            <label for="image-file">Nova imagem</label>
+            <input id="image-file" name="file" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+            <button type="button" id="image-upload-submit">Enviar e auto-tag</button>
+            <button type="button" id="image-auto-tag">Auto-tag pendentes</button>
+          </div>
+        </div>
+        <div class="search-row">
+          <label class="sr-only" for="query">Pesquisar nos livros</label>
+          <input id="query" name="q" type="search" minlength="2" maxlength="300"
+                 placeholder="Ex.: ataque flamejante, 2d6, vantagem..." autocomplete="off" required>
+          <button type="submit" id="search-submit">Pesquisar</button>
+        </div>
+      </form>
+      <section class="popular" id="popular" aria-label="Acessos frequentes" hidden>
+        <div class="popular-group" id="popular-searches" hidden>
+          <span>Mais pesquisado</span>
+          <div class="popular-links"></div>
+        </div>
+        <div class="popular-group" id="popular-questions" hidden>
+          <span>Mais perguntado</span>
+          <div class="popular-links"></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="workspace" aria-live="polite">
+      <div class="results-heading">
+        <div>
+          <p class="eyebrow">Resultados</p>
+          <h2 id="result-title">Sua biblioteca está pronta para consultar</h2>
+        </div>
+        <span id="result-count"></span>
+      </div>
+      <div id="results" class="results">
+        <div class="empty-state">
+          <span class="empty-symbol" aria-hidden="true">⌕</span>
+          <p>Digite uma regra, poder ou notação de dados para começar.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="result-template">
+    <article class="result-card">
+      <div class="result-meta">
+        <div><span class="result-kind" hidden></span><span class="book-name"></span></div>
+        <span class="page-reference"></span>
+      </div>
+      <p class="snippet"></p>
+      <button type="button" class="open-page">Abrir página</button>
+    </article>
+  </template>
+
+  <dialog id="source-dialog" aria-labelledby="source-title">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">Drive ou pasta local</p>
+        <h2 id="source-title">Fonte da biblioteca</h2>
+      </div>
+      <button type="button" class="icon-button" id="close-source" aria-label="Fechar">×</button>
+    </div>
+    <p class="dialog-copy">Escolha uma pasta deste computador ou configure acesso somente de leitura ao Google Drive.</p>
+    <div class="setup-step">
+      <span class="step-number">A</span>
+      <form id="local-folder-form">
+        <label for="local-folder-path">Caminho da pasta local</label>
+        <input id="local-folder-path" type="text" placeholder="/home/usuario/Livros RPG" required>
+        <button type="submit" class="secondary-button">Usar pasta local</button>
+      </form>
+    </div>
+    <div class="setup-step">
+      <span class="step-number">1</span>
+      <form id="oauth-file-form">
+        <label for="oauth-file">Credenciais OAuth do Google</label>
+        <input id="oauth-file" name="file" type="file" accept="application/json,.json" required>
+        <button type="submit" class="secondary-button">Carregar JSON</button>
+      </form>
+    </div>
+    <div class="setup-step">
+      <span class="step-number">2</span>
+      <div>
+        <strong>Autorizar acesso de leitura</strong>
+        <p>A aplicação nunca altera os arquivos originais.</p>
+        <button type="button" id="authorize-drive">Conectar ao Google Drive</button>
+      </div>
+    </div>
+    <div class="setup-step">
+      <span class="step-number">3</span>
+      <form id="folder-form">
+        <label for="drive-folder-link">Link da pasta com os livros</label>
+        <input id="drive-folder-link" type="url"
+               placeholder="https://drive.google.com/drive/folders/..." required disabled>
+        <button type="submit" disabled>Usar esta pasta</button>
+      </form>
+    </div>
+    <div class="setup-step">
+      <span class="step-number">4</span>
+      <div>
+        <strong>Ingerir a biblioteca</strong>
+        <p>Novos arquivos, versões e alterações serão sincronizados automaticamente a cada minuto. Cópias idênticas não serão indexadas.</p>
+        <button type="button" id="sync-drive" disabled>Sincronizar agora</button>
+        <div class="sync-progress" id="sync-progress-panel" hidden>
+          <progress id="sync-progress" max="1" value="0"></progress>
+          <span id="sync-current-file"></span>
+        </div>
+        <p class="sync-summary" id="sync-summary"></p>
+      </div>
+    </div>
+    <div class="setup-step">
+      <span class="step-number">IA</span>
+      <form id="ollama-form">
+        <strong>Servidor Ollama</strong>
+        <p id="ollama-status">Verificando conexão...</p>
+        <label for="ollama-url">URL do servidor</label>
+        <input id="ollama-url" type="url" placeholder="http://127.0.0.1:11434" required>
+        <label for="ollama-text-model">Modelo de texto</label>
+        <input id="ollama-text-model" type="text" placeholder="gemma3:latest" required>
+        <label for="ollama-vision-model">Modelo de visão</label>
+        <input id="ollama-vision-model" type="text" placeholder="gemma3:4b" required>
+        <label class="checkbox-row" for="ollama-auto-pull">
+          <input id="ollama-auto-pull" type="checkbox">
+          Instalar modelos compatíveis automaticamente
+        </label>
+        <button type="submit" class="secondary-button">Salvar configuração do Ollama</button>
+      </form>
+    </div>
+    <p class="setup-message" id="setup-message" role="status"></p>
+  </dialog>
+
+  <dialog id="page-dialog" class="page-dialog" aria-labelledby="page-preview-title">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">Prévia da página</p>
+        <h2 id="page-preview-title"></h2>
+      </div>
+      <div class="page-dialog-actions">
+        <div class="zoom-controls" aria-label="Zoom da página">
+          <button type="button" id="zoom-out" aria-label="Diminuir zoom" title="Diminuir zoom">−</button>
+          <output id="zoom-level" aria-live="polite">100%</output>
+          <button type="button" id="zoom-in" aria-label="Aumentar zoom" title="Aumentar zoom">+</button>
+          <button type="button" id="zoom-fit" aria-label="Ajustar à largura" title="Ajustar à largura">↔</button>
+        </div>
+        <button type="button" class="icon-button" id="close-page" aria-label="Fechar">×</button>
+      </div>
+    </div>
+    <div class="page-preview-frame">
+      <p id="page-preview-status">Renderizando página...</p>
+      <div id="page-preview-pdf" class="pdf-page" hidden>
+        <canvas id="page-preview-canvas"></canvas>
+        <div id="page-preview-text" class="text-layer"></div>
+      </div>
+    </div>
+    <a id="open-full-pdf" class="full-pdf-link" href="#" target="_blank" rel="noopener">
+      Abrir PDF completo
+    </a>
+  </dialog>
+
+  <dialog id="image-dialog" class="image-dialog" aria-labelledby="image-preview-title">
+    <div class="dialog-heading">
+      <div>
+        <p class="eyebrow">Prévia da imagem</p>
+        <h2 id="image-preview-title"></h2>
+      </div>
+      <button type="button" class="icon-button" id="close-image" aria-label="Fechar">×</button>
+    </div>
+    <div class="image-preview-frame">
+      <img id="image-preview" alt="">
+    </div>
+    <a id="download-image" class="full-pdf-link" href="#" download>Baixar imagem</a>
+  </dialog>
+
+  <script>
+    const form = document.querySelector('#search-form');
+    const results = document.querySelector('#results');
+    const resultTitle = document.querySelector('#result-title');
+    const resultCount = document.querySelector('#result-count');
+    const template = document.querySelector('#result-template');
+    const queryInput = document.querySelector('#query');
+    const searchSubmit = document.querySelector('#search-submit');
+    const popular = document.querySelector('#popular');
+    const modeButtons = document.querySelectorAll('[data-mode]');
+    const threatOptions = document.querySelector('#threat-options');
+    const imageOptions = document.querySelector('#image-options');
+    const imageUploadForm = document.querySelector('#image-upload-form');
+    const imageUploadSubmit = document.querySelector('#image-upload-submit');
+    const imageFile = document.querySelector('#image-file');
+    const imageAutoTag = document.querySelector('#image-auto-tag');
+    const threatCategory = document.querySelector('#threat-category');
+    const sourceButton = document.querySelector('#source-button');
+    const sourceLabel = document.querySelector('#source-label');
+    const sourceDialog = document.querySelector('#source-dialog');
+    const setupMessage = document.querySelector('#setup-message');
+    const authorizeDrive = document.querySelector('#authorize-drive');
+    const folderForm = document.querySelector('#folder-form');
+    const folderLink = document.querySelector('#drive-folder-link');
+    const localFolderForm = document.querySelector('#local-folder-form');
+    const localFolderPath = document.querySelector('#local-folder-path');
+    const syncDrive = document.querySelector('#sync-drive');
+    const syncProgressPanel = document.querySelector('#sync-progress-panel');
+    const syncProgress = document.querySelector('#sync-progress');
+    const syncCurrentFile = document.querySelector('#sync-current-file');
+    const syncSummary = document.querySelector('#sync-summary');
+    const ollamaForm = document.querySelector('#ollama-form');
+    const ollamaUrl = document.querySelector('#ollama-url');
+    const ollamaTextModel = document.querySelector('#ollama-text-model');
+    const ollamaVisionModel = document.querySelector('#ollama-vision-model');
+    const ollamaAutoPull = document.querySelector('#ollama-auto-pull');
+    const ollamaStatus = document.querySelector('#ollama-status');
+    const pageDialog = document.querySelector('#page-dialog');
+    const pagePreviewTitle = document.querySelector('#page-preview-title');
+    const pagePreviewStatus = document.querySelector('#page-preview-status');
+    const pagePreviewPdf = document.querySelector('#page-preview-pdf');
+    const pagePreviewCanvas = document.querySelector('#page-preview-canvas');
+    const pagePreviewText = document.querySelector('#page-preview-text');
+    const openFullPdf = document.querySelector('#open-full-pdf');
+    const zoomOut = document.querySelector('#zoom-out');
+    const zoomIn = document.querySelector('#zoom-in');
+    const zoomFit = document.querySelector('#zoom-fit');
+    const zoomLevel = document.querySelector('#zoom-level');
+    const imageDialog = document.querySelector('#image-dialog');
+    const imagePreviewTitle = document.querySelector('#image-preview-title');
+    const imagePreview = document.querySelector('#image-preview');
+    const downloadImage = document.querySelector('#download-image');
+    const pdfJsReady = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs')
+      .then(pdfjs => {
+        pdfjs.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+        return pdfjs;
+      });
+    let searchMode = 'text';
+    let syncPollId = null;
+    let pageRenderToken = 0;
+    let currentPageUrl = '';
+    let currentZoom = 1;
+    let pageResizeTimer = null;
+    let pageRenderQueue = Promise.resolve();
+
+    const ruleTaxonomy = [
+      { kind: 'element', terms: ['elemento', 'elemental', 'fogo', 'água', 'terra', 'ar', 'energia', 'sangue', 'morte', 'conhecimento', 'medo'] },
+      { kind: 'ritual', terms: ['ritual', 'rituais', 'círculo', 'conjuração', 'conjurar', 'ocultista'] },
+      { kind: 'weapon', terms: ['arma', 'armas', 'espada', 'machado', 'arco', 'pistola', 'rifle', 'fuzil', 'corpo a corpo', 'munição'] },
+      { kind: 'threat', terms: ['ameaça', 'ameaças', 'criatura', 'monstro', 'inimigo', 'adversário'] },
+      { kind: 'ability', terms: ['habilidade', 'habilidades', 'poder', 'poderes', 'talento', 'aptidão'] },
+      { kind: 'defense', terms: ['defesa', 'armadura', 'escudo', 'resistência', 'proteção'] },
+      { kind: 'damage', terms: ['dano', 'danos', 'crítico', 'ferimento', 'vida', 'pv'] },
+      { kind: 'action', terms: ['ação', 'ações', 'reação', 'movimento', 'ataque', 'teste'] },
+    ];
+    const taxonomyLabels = {
+      element: 'Elemento', ritual: 'Ritual', weapon: 'Arma', threat: 'Ameaça',
+      ability: 'Habilidade', defense: 'Defesa', damage: 'Dano', action: 'Ação',
+    };
+    const taxonomyTerms = ruleTaxonomy
+      .flatMap(({ kind, terms }) => terms.map(term => ({ kind, term })))
+      .sort((left, right) => right.term.length - left.term.length);
+    const taxonomyPattern = new RegExp(
+      `(?<![\\p{L}\\p{N}_])(${taxonomyTerms.map(item => item.term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?![\\p{L}\\p{N}_])`,
+      'giu',
+    );
+    const taxonomyByTerm = new Map(
+      taxonomyTerms.map(({ kind, term }) => [term.toLocaleLowerCase('pt-BR'), kind]),
+    );
+
+    function appendTaxonomyText(container, text) {
+      let start = 0;
+      for (const match of text.matchAll(taxonomyPattern)) {
+        container.append(document.createTextNode(text.slice(start, match.index)));
+        const kind = taxonomyByTerm.get(match[0].toLocaleLowerCase('pt-BR'));
+        const term = document.createElement('span');
+        term.className = `rule-term rule-term-${kind}`;
+        term.title = taxonomyLabels[kind];
+        term.textContent = match[0];
+        container.append(term);
+        start = match.index + match[0].length;
+      }
+      container.append(document.createTextNode(text.slice(start)));
+    }
+
+    function appendHighlightedSnippet(container, snippet) {
+      const parts = snippet.split(/(<mark>|<\/mark>)/i);
+      let target = container;
+      for (const part of parts) {
+        if (part.toLowerCase() === '<mark>') {
+          target = document.createElement('mark');
+          container.append(target);
+        } else if (part.toLowerCase() === '</mark>') {
+          target = container;
+        } else {
+          appendTaxonomyText(target, part);
+        }
+      }
+    }
+
+    function updateZoomControls(rendering = false) {
+      zoomLevel.value = `${Math.round(currentZoom * 100)}%`;
+      zoomOut.disabled = rendering || currentZoom <= 0.5;
+      zoomIn.disabled = rendering || currentZoom >= 2.5;
+      zoomFit.disabled = rendering || currentZoom === 1;
+    }
+
+    async function renderPdfPage(url, renderToken) {
+      if (renderToken !== pageRenderToken) return;
+      updateZoomControls(true);
+      const pdfjs = await pdfJsReady;
+      const loadingTask = pdfjs.getDocument(url);
+      const pdf = await loadingTask.promise;
+      const pdfPage = await pdf.getPage(1);
+      if (renderToken !== pageRenderToken) return;
+
+      const naturalViewport = pdfPage.getViewport({ scale: 1 });
+      const availableWidth = Math.max(280, pagePreviewPdf.parentElement.clientWidth - 32);
+      const scale = (availableWidth / naturalViewport.width) * currentZoom;
+      const viewport = pdfPage.getViewport({ scale });
+      const outputScale = window.devicePixelRatio || 1;
+      const context = pagePreviewCanvas.getContext('2d');
+
+      pagePreviewCanvas.width = Math.floor(viewport.width * outputScale);
+      pagePreviewCanvas.height = Math.floor(viewport.height * outputScale);
+      pagePreviewCanvas.style.width = `${Math.floor(viewport.width)}px`;
+      pagePreviewCanvas.style.height = `${Math.floor(viewport.height)}px`;
+      pagePreviewPdf.style.width = `${Math.floor(viewport.width)}px`;
+      pagePreviewPdf.style.height = `${Math.floor(viewport.height)}px`;
+      pagePreviewText.replaceChildren();
+
+      await pdfPage.render({
+        canvasContext: context,
+        viewport,
+        transform: outputScale === 1 ? null : [outputScale, 0, 0, outputScale, 0, 0],
+      }).promise;
+      const textContent = await pdfPage.getTextContent();
+      const textLayer = new pdfjs.TextLayer({
+        textContentSource: textContent,
+        container: pagePreviewText,
+        viewport,
+      });
+      await textLayer.render();
+      if (renderToken !== pageRenderToken) return;
+
+      pagePreviewStatus.hidden = true;
+      pagePreviewPdf.hidden = false;
+      updateZoomControls();
+    }
+
+    function queuePdfRender(url, renderToken) {
+      const queuedRender = pageRenderQueue
+        .catch(() => undefined)
+        .then(() => renderPdfPage(url, renderToken));
+      pageRenderQueue = queuedRender;
+      return queuedRender;
+    }
+
+    async function changeZoom(nextZoom) {
+      if (!currentPageUrl) return;
+      currentZoom = Math.min(2.5, Math.max(0.5, nextZoom));
+      const renderToken = ++pageRenderToken;
+      pagePreviewStatus.textContent = 'Ajustando página...';
+      pagePreviewStatus.hidden = false;
+      pagePreviewPdf.hidden = true;
+      try {
+        await queuePdfRender(currentPageUrl, renderToken);
+      } catch (error) {
+        console.error(error);
+        pagePreviewStatus.textContent = 'Não foi possível ajustar esta página.';
+        updateZoomControls();
+      }
+    }
+
+    function configureOpenPage(button, item) {
+      button.addEventListener('click', async () => {
+        const page = item.page_index + 1;
+        const renderToken = ++pageRenderToken;
+        currentPageUrl = `/api/documents/${item.document_id}/pages/${item.page_index}.pdf`;
+        currentZoom = 1;
+        updateZoomControls();
+        pagePreviewTitle.textContent = `${item.document_name} · Página ${item.printed_page || page}`;
+        pagePreviewStatus.textContent = 'Renderizando página...';
+        pagePreviewStatus.hidden = false;
+        pagePreviewPdf.hidden = true;
+        openFullPdf.href = `/api/documents/${item.document_id}/file#page=${page}`;
+        pageDialog.showModal();
+        try {
+          await queuePdfRender(currentPageUrl, renderToken);
+        } catch (error) {
+          console.error(error);
+          pagePreviewStatus.textContent = 'Não foi possível renderizar esta página.';
+          pagePreviewStatus.hidden = false;
+          updateZoomControls();
+        }
+      });
+    }
+
+    zoomOut.addEventListener('click', () => changeZoom(currentZoom - 0.25));
+    zoomIn.addEventListener('click', () => changeZoom(currentZoom + 0.25));
+    zoomFit.addEventListener('click', () => changeZoom(1));
+    window.addEventListener('resize', () => {
+      if (!pageDialog.open || !currentPageUrl) return;
+      window.clearTimeout(pageResizeTimer);
+      pageResizeTimer = window.setTimeout(() => changeZoom(currentZoom), 150);
+    });
+
+    document.querySelector('#close-page').addEventListener('click', () => {
+      pageRenderToken += 1;
+      currentPageUrl = '';
+      window.clearTimeout(pageResizeTimer);
+      pageDialog.close();
+    });
+
+    function renderItems(items) {
+      results.replaceChildren();
+      for (const item of items) {
+        const card = template.content.cloneNode(true);
+        card.querySelector('.book-name').textContent = item.document_name;
+        const page = item.printed_page || String(item.page_index + 1);
+        card.querySelector('.page-reference').textContent = `Página ${page}`;
+        if (item.threat_category) {
+          const kind = card.querySelector('.result-kind');
+          kind.hidden = false;
+          kind.textContent = item.threat_category;
+        }
+        appendHighlightedSnippet(card.querySelector('.snippet'), item.snippet);
+        configureOpenPage(card.querySelector('.open-page'), item);
+        results.append(card);
+      }
+    }
+
+    function renderImageItems(items) {
+      results.replaceChildren();
+      for (const item of items) {
+        const card = template.content.cloneNode(true);
+        card.querySelector('.book-name').textContent = item.file_name;
+        const size = item.width && item.height ? `${item.width}×${item.height}` : 'dimensão desconhecida';
+        card.querySelector('.page-reference').textContent = size;
+        const snippet = item.tags.length
+          ? item.tags.map(tag => `#${tag}`).join(' · ')
+          : 'Sem tags ainda.';
+        card.querySelector('.snippet').textContent = snippet;
+        const button = card.querySelector('.open-page');
+        button.textContent = 'Ver imagem';
+        button.addEventListener('click', () => {
+          imagePreviewTitle.textContent = item.file_name;
+          imagePreview.src = item.image_url;
+          imagePreview.alt = `Prévia de ${item.file_name}`;
+          downloadImage.href = `/api/images/${item.image_id}/file`;
+          downloadImage.download = item.file_name;
+          imageDialog.showModal();
+        });
+        results.append(card);
+      }
+    }
+
+    document.querySelector('#close-image').addEventListener('click', () => imageDialog.close());
+    imageDialog.addEventListener('close', () => {
+      imagePreview.removeAttribute('src');
+      imagePreview.alt = '';
+      downloadImage.href = '#';
+    });
+
+    for (const button of modeButtons) {
+      button.addEventListener('click', () => {
+        searchMode = button.dataset.mode;
+        for (const other of modeButtons) {
+          const active = other === button;
+          other.classList.toggle('active', active);
+          other.setAttribute('aria-pressed', String(active));
+        }
+        threatOptions.hidden = searchMode !== 'threats';
+        imageOptions.hidden = searchMode !== 'images';
+        queryInput.required = searchMode !== 'threats' && searchMode !== 'images';
+        searchSubmit.textContent = 'Pesquisar';
+        queryInput.placeholder = searchMode === 'question'
+          ? 'Ex.: Como funciona o ataque flamejante?'
+          : searchMode === 'threats'
+            ? 'Nome ou característica da ameaça (opcional)'
+            : searchMode === 'images'
+              ? 'Ex.: espada, mapa, símbolo, retrô (opcional)'
+            : 'Ex.: ataque flamejante, 2d6, vantagem...';
+      });
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const query = String(new FormData(form).get('q') || '').trim();
+      results.innerHTML = '<div class="empty-state"><p>Pesquisando na biblioteca...</p></div>';
+      resultTitle.textContent = query
+        ? `Buscando por “${query}”`
+        : searchMode === 'threats'
+          ? 'Buscando fichas de ameaças'
+          : searchMode === 'images'
+            ? 'Carregando biblioteca de imagens'
+            : 'Buscando na biblioteca';
+      resultCount.textContent = '';
+
+      try {
+        let endpoint = `/api/search?q=${encodeURIComponent(query)}`;
+        if (searchMode === 'question') {
+          const parameters = new URLSearchParams({ q: query });
+          endpoint = `/api/ask?${parameters}`;
+        }
+        if (searchMode === 'threats') {
+          const parameters = new URLSearchParams();
+          if (query) parameters.set('q', query);
+          if (threatCategory.value) parameters.set('category', threatCategory.value);
+          endpoint = `/api/threats?${parameters}`;
+        }
+        if (searchMode === 'images') {
+          const parameters = new URLSearchParams();
+          if (query) parameters.set('q', query);
+          endpoint = `/api/images?${parameters}`;
+        }
+        const response = await fetch(endpoint);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível pesquisar.');
+
+        if (searchMode === 'question') {
+          resultTitle.textContent = 'Resposta fundamentada';
+          results.replaceChildren();
+          const answer = document.createElement('article');
+          answer.className = 'answer';
+          const answerText = document.createElement('p');
+          appendTaxonomyText(answerText, data.answer);
+          const modelName = document.createElement('span');
+          modelName.textContent = `Modelo local: ${data.model}`;
+          const extendedButton = document.createElement('button');
+          extendedButton.type = 'button';
+          extendedButton.className = 'extended-answer';
+          extendedButton.textContent = 'Aprofundar resposta';
+          extendedButton.addEventListener('click', async () => {
+            extendedButton.disabled = true;
+            extendedButton.textContent = 'Analisando mais evidências...';
+            try {
+              const response = await fetch(`/api/ask?q=${encodeURIComponent(query)}&extended=true`);
+              const extendedData = await response.json();
+              if (!response.ok) throw new Error(extendedData.detail || 'Não foi possível aprofundar.');
+              answerText.replaceChildren();
+              appendTaxonomyText(answerText, extendedData.answer);
+              extendedButton.remove();
+              await refreshPopular();
+            } catch (error) {
+              extendedButton.disabled = false;
+              extendedButton.textContent = 'Tentar aprofundar novamente';
+            }
+          });
+          answer.append(answerText, modelName, extendedButton);
+          results.append(answer);
+          renderItemsAfterAnswer(data.sources);
+          resultCount.textContent = `${data.sources.length} fonte${data.sources.length === 1 ? '' : 's'}`;
+          await refreshPopular();
+          return;
+        }
+
+        resultTitle.textContent = searchMode === 'threats'
+          ? 'Fichas de ameaças encontradas'
+          : searchMode === 'images'
+            ? 'Biblioteca de imagens'
+          : `Resultados para “${query}”`;
+        resultCount.textContent = `${data.results.length} encontrado${data.results.length === 1 ? '' : 's'}`;
+
+        if (!data.results.length) {
+          results.innerHTML = searchMode === 'images'
+            ? '<div class="empty-state"><p>Nenhuma imagem encontrada. Envie uma imagem para começar.</p></div>'
+            : '<div class="empty-state"><p>Nenhuma regra encontrada. Tente outros termos.</p></div>';
+          return;
+        }
+
+        if (searchMode === 'images') {
+          renderImageItems(data.results);
+        } else {
+          renderItems(data.results);
+        }
+        await refreshPopular();
+      } catch (error) {
+        resultTitle.textContent = 'A busca não pôde ser concluída';
+        results.innerHTML = `<div class="empty-state"><p>${error.message}</p></div>`;
+      }
+    });
+
+    function renderItemsAfterAnswer(items) {
+      const answer = results.firstElementChild;
+      for (const item of items) {
+        const card = template.content.cloneNode(true);
+        card.querySelector('.book-name').textContent = item.document_name;
+        const page = item.printed_page || String(item.page_index + 1);
+        card.querySelector('.page-reference').textContent = `Página ${page}`;
+        appendHighlightedSnippet(card.querySelector('.snippet'), item.snippet);
+        configureOpenPage(card.querySelector('.open-page'), item);
+        results.append(card);
+      }
+      results.prepend(answer);
+    }
+
+    function renderPopularGroup(groupId, items, mode) {
+      const group = document.querySelector(`#${groupId}`);
+      const links = group.querySelector('.popular-links');
+      links.replaceChildren();
+      group.hidden = !items.length;
+      for (const item of items) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = item.query;
+        button.title = `${item.count} ${item.count === 1 ? 'acesso' : 'acessos'}`;
+        button.addEventListener('click', () => {
+          document.querySelector(`[data-mode="${mode}"]`).click();
+          queryInput.value = item.query;
+          form.requestSubmit();
+        });
+        links.append(button);
+      }
+    }
+
+    async function refreshPopular() {
+      const response = await fetch('/api/popular');
+      if (!response.ok) return;
+      const data = await response.json();
+      renderPopularGroup('popular-searches', data.searches, 'text');
+      renderPopularGroup('popular-questions', data.questions, 'question');
+      popular.hidden = !data.searches.length && !data.questions.length;
+    }
+
+    async function refreshSource() {
+      const [sourceResponse, oauthResponse] = await Promise.all([
+        fetch('/api/source'),
+        fetch('/api/oauth/status'),
+      ]);
+      const source = await sourceResponse.json();
+      const oauth = await oauthResponse.json();
+      sourceButton.classList.toggle('connected', source.configured);
+      sourceLabel.textContent = source.configured ? source.folder_name : 'Configurar biblioteca';
+      authorizeDrive.disabled = !oauth.client_configured;
+      authorizeDrive.textContent = oauth.authorized ? 'Google Drive autorizado' : 'Conectar ao Google Drive';
+      syncDrive.disabled = !source.configured || (source.source_type === 'drive' && !oauth.authorized);
+      folderLink.disabled = !oauth.authorized;
+      folderForm.querySelector('button').disabled = !oauth.authorized;
+      if (source.configured) await refreshSyncStatus();
+    }
+
+    async function refreshOllama() {
+      ollamaStatus.textContent = 'Verificando conexão...';
+      const response = await fetch('/api/ollama');
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || 'Não foi possível consultar o Ollama.');
+      ollamaUrl.value = data.base_url;
+      ollamaTextModel.value = data.text_model;
+      ollamaVisionModel.value = data.vision_model;
+      ollamaAutoPull.checked = data.auto_pull;
+      const location = data.is_local ? 'local' : 'remoto';
+      const baseStatus = data.available
+        ? `Conectado ao servidor ${location} · ${data.installed_models.length} modelo(s) instalado(s)`
+        : `Servidor ${location} indisponível`;
+      ollamaStatus.textContent = data.image_auto_tag_retry_in_seconds > 0
+        ? `${baseStatus} · auto-tag de imagens em pausa por ${data.image_auto_tag_retry_in_seconds}s`
+        : `${baseStatus} · cooldown do auto-tag: ${data.image_auto_tag_cooldown_seconds}s`;
+    }
+
+    function showSyncStatus(status) {
+      if (status.running) {
+        syncDrive.disabled = true;
+        syncDrive.textContent = 'Sincronizando...';
+        syncProgressPanel.hidden = false;
+        syncProgress.max = Math.max(status.discovered, 1);
+        syncProgress.value = status.processed;
+        syncCurrentFile.textContent = status.current_file
+          ? `Processando: ${status.current_file}`
+          : 'Descobrindo arquivos na pasta...';
+        syncSummary.textContent = status.discovered
+          ? `${status.processed} de ${status.discovered} arquivos processados`
+          : 'Consultando o Google Drive...';
+        startSyncPolling();
+        return;
+      }
+      stopSyncPolling();
+      syncDrive.disabled = false;
+      syncDrive.textContent = 'Sincronizar agora';
+      syncProgressPanel.hidden = true;
+      const parts = [
+        `${status.discovered} encontrado${status.discovered === 1 ? '' : 's'}`,
+        `${status.ingested} ingerido${status.ingested === 1 ? '' : 's'}`,
+        `${status.unchanged} sem alteração`,
+        `${status.duplicates} duplicado${status.duplicates === 1 ? '' : 's'}`,
+        `${status.removed} removido${status.removed === 1 ? '' : 's'}`,
+      ];
+      if (status.errors.length) parts.push(`${status.errors.length} erro${status.errors.length === 1 ? '' : 's'}`);
+      syncSummary.textContent = status.last_sync_at ? parts.join(' · ') : '';
+    }
+
+    function startSyncPolling() {
+      if (syncPollId === null) syncPollId = window.setInterval(refreshSyncStatus, 1000);
+    }
+
+    function stopSyncPolling() {
+      if (syncPollId !== null) window.clearInterval(syncPollId);
+      syncPollId = null;
+    }
+
+    async function refreshSyncStatus() {
+      const response = await fetch('/api/sync');
+      if (!response.ok) return;
+      showSyncStatus(await response.json());
+    }
+
+    sourceButton.addEventListener('click', async () => {
+      sourceDialog.showModal();
+      setupMessage.textContent = '';
+      try {
+        await Promise.all([refreshSource(), refreshOllama()]);
+      } catch (error) {
+        setupMessage.textContent = error.message;
+      }
+    });
+    document.querySelector('#close-source').addEventListener('click', () => sourceDialog.close());
+
+    document.querySelector('#oauth-file-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      setupMessage.textContent = 'Validando credenciais...';
+      const response = await fetch('/api/oauth/client', { method: 'POST', body: new FormData(event.target) });
+      const data = await response.json();
+      if (!response.ok) { setupMessage.textContent = data.detail; return; }
+      setupMessage.textContent = 'Credenciais carregadas. Agora autorize o acesso.';
+      await refreshSource();
+    });
+
+    authorizeDrive.addEventListener('click', async () => {
+      const response = await fetch('/api/oauth/start', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) { setupMessage.textContent = data.detail; return; }
+      window.location.assign(data.authorization_url);
+    });
+
+    folderForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const response = await fetch('/api/source', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_url: folderLink.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) { setupMessage.textContent = data.detail; return; }
+      setupMessage.textContent = `Pasta “${data.folder_name}” selecionada.`;
+      await refreshSource();
+    });
+
+    localFolderForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const response = await fetch('/api/source/local', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder_path: localFolderPath.value }),
+      });
+      const data = await response.json();
+      if (!response.ok) { setupMessage.textContent = data.detail; return; }
+      setupMessage.textContent = `Pasta local “${data.folder_name}” selecionada.`;
+      await refreshSource();
+    });
+
+    ollamaForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const submit = ollamaForm.querySelector('button');
+      submit.disabled = true;
+      submit.textContent = 'Salvando...';
+      setupMessage.textContent = '';
+      try {
+        const response = await fetch('/api/ollama', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base_url: ollamaUrl.value,
+            text_model: ollamaTextModel.value,
+            vision_model: ollamaVisionModel.value,
+            auto_pull: ollamaAutoPull.checked,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar o Ollama.');
+        setupMessage.textContent = 'Configuração do Ollama salva.';
+        await refreshOllama();
+      } catch (error) {
+        setupMessage.textContent = error.message;
+      } finally {
+        submit.disabled = false;
+        submit.textContent = 'Salvar configuração do Ollama';
+      }
+    });
+
+    imageUploadSubmit.addEventListener('click', async () => {
+      if (!imageFile.files.length) {
+        setupMessage.textContent = 'Selecione uma imagem para enviar.';
+        return;
+      }
+      const uploadForm = new FormData();
+      uploadForm.set('file', imageFile.files[0]);
+      setupMessage.textContent = 'Enviando imagem para a biblioteca...';
+      const response = await fetch('/api/images?auto_tag=true', {
+        method: 'POST',
+        body: uploadForm,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setupMessage.textContent = data.detail || 'Não foi possível enviar a imagem.';
+        return;
+      }
+      setupMessage.textContent = data.duplicate
+        ? `Imagem já existia: ${data.file_name}`
+        : `Imagem adicionada: ${data.file_name}`;
+      imageFile.value = '';
+      document.querySelector('[data-mode="images"]').click();
+      form.requestSubmit();
+    });
+
+    imageAutoTag.addEventListener('click', async () => {
+      setupMessage.textContent = 'Aplicando auto-tag nas imagens pendentes...';
+      const response = await fetch('/api/images/auto-tag?limit=200', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) {
+        setupMessage.textContent = data.detail || 'Falha no auto-tag em lote.';
+        return;
+      }
+      setupMessage.textContent = `Auto-tag concluído: ${data.tagged}/${data.processed}`;
+      if (searchMode === 'images') form.requestSubmit();
+    });
+
+    syncDrive.addEventListener('click', async () => {
+      syncDrive.disabled = true;
+      syncDrive.textContent = 'Sincronizando...';
+      showSyncStatus({ running: true, discovered: 0, processed: 0, current_file: null });
+      const response = await fetch('/api/sync', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) {
+        setupMessage.textContent = data.detail || 'Não foi possível sincronizar.';
+        syncDrive.disabled = false;
+        syncDrive.textContent = 'Sincronizar agora';
+        return;
+      }
+      showSyncStatus(data);
+      syncDrive.disabled = false;
+      if (data.errors.length) {
+        setupMessage.textContent = data.errors.map(error => `${error.file_name}: ${error.message}`).join(' | ');
+      } else {
+        setupMessage.textContent = 'Biblioteca sincronizada e pronta para pesquisa.';
+      }
+    });
+
+    refreshSource().catch(() => {});
+    refreshPopular().catch(() => {});
+    const callbackParameters = new URLSearchParams(window.location.search);
+    if (callbackParameters.has('oauth') || callbackParameters.has('oauth_error')) {
+      sourceDialog.showModal();
+    }
+    if (callbackParameters.has('oauth_error')) {
+      setupMessage.textContent = 'A autorização não foi concluída. Clique em Conectar ao Google Drive e tente novamente.';
+    }
+  </script>
+</body>
+</html>

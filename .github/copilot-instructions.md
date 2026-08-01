@@ -1,0 +1,148 @@
+# Arquivo Arcano
+
+## Objetivo
+
+Este projeto é uma aplicação local-first para sincronizar livros de RPG do Google Drive, indexar regras por página e responder perguntas com evidências usando Ollama.
+
+## Arquitetura
+
+- Use Python 3.12, FastAPI, SQLite FTS5, PyMuPDF e Ollama.
+- O código fica em `src/rpg_rules_search/` e os testes em `tests/`.
+- `sync.py` coordena a sincronização; `local_folder.py` adapta pastas locais; `ingestion/` extrai conteúdo; `database.py` mantém índice, atividade e imagens; `ollama.py` controla recuperação, prompts e auto-tag local; `app.py` expõe a API e a interface.
+- PDFs, banco e OAuth são dados locais. Nunca envie esse conteúdo para serviços externos.
+
+## Regras De Implementação
+
+- Preserve a abordagem local-first e as citações no formato `[Livro, p. X]`.
+- Respostas do Ollama devem usar apenas páginas recuperadas. Não persista perguntas ou contexto como ensinamentos.
+- A biblioteca pode usar uma pasta local ou uma pasta do Google Drive. Preserve sincronização automática para ambas.
+- Deduplicate arquivos pelo SHA-256 do conteúdo. Cópias idênticas não devem ser indexadas; versões com conteúdo diferente, como 1.0 e 1.1, devem permanecer separadas e citadas pelo próprio nome.
+- Para busca, prefira termos significativos com interseção (`AND`) e mantenha os fallbacks existentes para `OR`, erros de digitação e correspondência parcial.
+- Normalize Unicode, hífens de quebra de linha e espaços na produção do índice, não apenas na interface.
+- Na biblioteca de imagens, preserve deduplicação por SHA-256 e tags em português geradas localmente por Ollama.
+- Imagens suportadas presentes na pasta local ou no Drive configurado devem ser sincronizadas automaticamente, com tags iniciais pelo nome e enriquecimento opcional pelo modelo de visão.
+- O runtime do Ollama deve iniciar apenas hosts locais, selecionar modelos de texto e visão separadamente e respeitar `RPG_RULES_OLLAMA_AUTO_PULL=0`; URLs remotas nunca devem iniciar processos locais ou remotos.
+- `remote_ollama.py` instala apenas no computador onde é executado, serve na LAN por solicitação explícita e configura a URL persistente sem SSH ou execução remota implícita.
+- O MCP de desenvolvimento usa `stdio`, fica configurado somente neste workspace e pode enviar ao Ollama apenas arquivos textuais explicitamente selecionados dentro do repositório; credenciais e dados da biblioteca são proibidos.
+- Alterações no formato do índice devem incrementar `INDEX_VERSION` para reindexar documentos inalterados na próxima sincronização.
+- Preserve página, documento e texto bruto ao alterar resultados de busca ou evidências.
+- Use consultas SQLite parametrizadas. Nunca interpolar entrada do usuário em SQL, exceto placeholders gerados internamente.
+- Mantenha os endpoints existentes compatíveis e alterações pequenas, tipadas e testáveis.
+- Não edite arquivos `*.min.*` manualmente, salvo quando o processo de build do projeto exigir esses artefatos.
+
+## Interface
+
+- Mantenha o visual editorial e utilitário existente, com boa leitura em desktop e mobile.
+- Controles novos devem ter rótulos claros, estado de carregamento e mensagens de erro em português.
+- A prévia PDF deve continuar selecionável, copiável e responsiva.
+- Destaques de taxonomia no texto devem preservar o conteúdo, combinar com `<mark>`, tratar Unicode e manter cores distintas para elemento, ritual, arma, ameaça, habilidade, defesa, dano e ação.
+
+## Validação
+
+- Execute primeiro o teste focado da área alterada.
+- Antes de concluir, execute `.venv/bin/python -m pytest -q`.
+- Use `.venv/bin/python` para comandos Python do projeto.
+- Não corrija falhas não relacionadas sem explicar e obter escopo.# Instruções para o GitHub Copilot — Arquivo Arcano (rpg-rules-search)
+
+Este arquivo orienta o Copilot (chat, edits e agente) a trabalhar neste repositório
+com o mínimo de perguntas e o máximo de acerto. Mantenha-o atualizado: sempre que
+você (Copilot) aprender algo novo sobre o projeto durante uma conversa — uma
+decisão de arquitetura, uma armadilha, uma preferência do usuário — proponha um
+ajuste neste arquivo antes de finalizar a resposta. Ensinar durante a própria
+pergunta é bem-vindo: se o usuário explicar um motivo ou convenção, registre aqui.
+
+## Visão geral do projeto
+
+Aplicação local (FastAPI + SQLite) para pesquisar regras, poderes, atributos,
+mecânicas e símbolos em PDFs/DOCX de RPG sincronizados de uma pasta do Google
+Drive. Sem backend na nuvem: tudo roda e fica salvo na máquina do usuário.
+
+- Backend: FastAPI (`src/rpg_rules_search/app.py`), servido com `uvicorn`.
+- Índice de busca: SQLite com FTS5 (`src/rpg_rules_search/database.py`).
+- Ingestão: PyMuPDF para PDF, LibreOffice + PyMuPDF para DOCX
+  (`src/rpg_rules_search/ingestion/`).
+- Sincronização: Google Drive API, polling a cada 60s
+  (`src/rpg_rules_search/sync.py`, `google_drive.py`, `drive.py`, `oauth.py`).
+- Modo "Pergunta": recupera trechos via FTS5 e manda para um Ollama local
+  (`src/rpg_rules_search/ollama.py`), exigindo citações `[Livro, p. X]`.
+- Frontend: templates Jinja2 + JS/CSS estático em
+  `src/rpg_rules_search/templates` e `src/rpg_rules_search/static`.
+
+Leia o [README.md](/home/hilton/rpg-rules-search/README.md) antes de mudanças
+grandes — ele documenta requisitos, variáveis de ambiente e o fluxo do Drive.
+
+## Como executar e testar
+
+```bash
+# rodar localmente (dependências já disponíveis neste ambiente)
+PYTHONPATH=src python3 -m rpg_rules_search
+
+# rodar a suíte de testes
+PYTHONPATH=src python3 -m pytest -q
+
+# lint (ruff já configurado em pyproject.toml)
+ruff check src tests
+```
+
+Sempre rode `pytest` depois de qualquer alteração em `src/` ou `tests/`. Não
+adicione ferramentas de lint/test novas — o projeto já usa `pytest` e `ruff`.
+
+## A melhor forma de pesquisar neste repositório
+
+Antes de editar, entenda o código existente com pesquisa direcionada em vez de
+ler tudo. Ordem recomendada:
+
+1. **Símbolo específico conhecido (função, classe, rota)** → use busca de
+   símbolo/"go to definition" do editor, ou `grep` com o nome exato.
+   Ex.: procurar `def sync_once` para achar a lógica de sincronização.
+2. **Comportamento ou fluxo ("como funciona X")** → grep por palavras-chave do
+   domínio em português E inglês (o código mistura os dois: rotas em inglês,
+   comentários e strings de UI em português). Ex.: buscar `ameaça`/`threat`,
+   `sincroniza`/`sync`, `pergunta`/`ask`.
+3. **Onde uma rota da API é tratada** → grep por `@app.get(` / `@app.post(` em
+   `src/rpg_rules_search/app.py` (arquivo grande, ~500 linhas — use
+   `view_range` em vez de ler tudo).
+4. **Testes como documentação viva** → antes de mudar um módulo, olhe o teste
+   correspondente em `tests/test_<modulo>.py`. Os testes mostram o contrato
+   esperado (ex.: `test_sync.py` mostra o que `sync.py` deve retornar em cada
+   cenário de conflito/erro).
+5. **Esquema do banco/índice FTS5** → sempre conferir `database.py` antes de
+   mudar queries de busca; a ordenação e o ranking de resultados dependem de
+   como o FTS5 foi configurado ali.
+
+Dicas específicas deste repo:
+
+- Evite `find`/`cat` manuais: os arquivos-fonte são poucos e pequenos
+  (a maioria < 200 linhas), então ler o arquivo inteiro geralmente é mais
+  rápido que grep exploratório repetido.
+- `app.py`, `database.py` e `ollama.py` são os arquivos mais centrais e mais
+  editados; comece a investigação por eles quando a tarefa não apontar um
+  arquivo específico.
+- Nunca abra ou leia `credencials.json`, tokens OAuth ou qualquer arquivo em
+  `~/.local/share/rpg-rules-search/` — são segredos/dados do usuário, fora do
+  repositório e do controle de versão.
+- O servidor de desenvolvimento roda com `--reload`; se precisar validar uma
+  mudança manualmente, prefira `curl http://127.0.0.1:8765/api/...` a abrir o
+  navegador, a menos que a tarefa seja de UI.
+
+## Convenções do projeto
+
+- Português é a língua da UI, README e mensagens ao usuário; nomes de código
+  (funções, variáveis, rotas) ficam em inglês. Siga esse padrão em código novo.
+- Nunca versionar `credentials.json`/`credencials.json`, tokens OAuth, PDFs,
+  DOCX, páginas renderizadas, OCR ou embeddings.
+- `.github/agents/arquivo-arcano.agent.md` é gerado por `scripts/update_agent.py` a partir deste arquivo. Não o edite manualmente; o hook de `SessionStart` mantém o agente atualizado.
+- Falha de sincronização de um livro não deve interromper os demais — mantenha
+  esse isolamento de erro por arquivo ao mexer em `sync.py`/`ingestion/`.
+- Mudanças em `pyproject.toml` (deps, ruff) exigem reinstalar com
+  `pip install -e '.[dev]'` antes de rodar testes.
+
+## Como este arquivo deve evoluir
+
+- Se o usuário corrigir um entendimento errado do Copilot sobre o projeto,
+  adicione a correção aqui na seção apropriada.
+- Se surgir uma pergunta repetida (ex.: "onde fica X?", "por que Y é assim?"),
+  transforme a resposta em uma entrada permanente aqui, em vez de responder
+  só no chat.
+- Mantenha as seções curtas e específicas deste repositório — evite conselhos
+  genéricos de engenharia de software que não agregam contexto local.

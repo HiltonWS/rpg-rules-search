@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Meu perfil — Arquivo Arcano</title>
+  <link rel="stylesheet" href="/static/app.css?v=20260801-9">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Arquivo Arcano, início">
+      <span class="brand-mark" aria-hidden="true">AA</span>
+      <span>Arquivo Arcano</span>
+    </a>
+    <a class="profile-link" href="/" aria-label="Voltar à biblioteca">Voltar à biblioteca</a>
+  </header>
+
+  <main class="profile-main">
+    <section class="profile-heading" aria-labelledby="profile-title">
+      <div>
+        <p class="eyebrow">Identidade local</p>
+        <h1 id="profile-title">Meu perfil</h1>
+        <p class="profile-heading-copy">Organize sua identidade de mesa sem criar uma conta ou enviar informações para fora deste navegador.</p>
+      </div>
+      <div class="profile-identity" aria-live="polite">
+        <span class="profile-avatar" id="profile-avatar" aria-hidden="true">AA</span>
+        <div>
+          <strong id="profile-display-name">Aventureiro Arcano</strong>
+          <span id="profile-display-role">Leitor da biblioteca</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="profile-layout">
+      <form class="profile-form" id="profile-form">
+        <div class="profile-fields">
+          <div class="profile-field">
+            <label for="profile-name">Nome de exibição</label>
+            <input id="profile-name" name="name" type="text" maxlength="80" autocomplete="name" placeholder="Como quer ser chamado">
+          </div>
+          <div class="profile-field">
+            <label for="profile-role">Papel na mesa</label>
+            <select id="profile-role" name="role">
+              <option value="">Selecione</option>
+              <option value="Mestre de jogo">Mestre de jogo</option>
+              <option value="Jogador">Jogador</option>
+              <option value="Criador de cenário">Criador de cenário</option>
+              <option value="Leitor da biblioteca">Leitor da biblioteca</option>
+            </select>
+          </div>
+          <div class="profile-field profile-field-wide">
+            <label for="profile-system">Sistema favorito</label>
+            <input id="profile-system" name="system" type="text" maxlength="100" placeholder="Ex.: Ordem Paranormal RPG">
+          </div>
+          <div class="profile-field profile-field-wide">
+            <label for="profile-bio">Sobre sua mesa</label>
+            <textarea id="profile-bio" name="bio" maxlength="500" placeholder="Campanhas, temas e tipos de regra que você consulta com frequência"></textarea>
+          </div>
+        </div>
+        <div class="profile-form-actions">
+          <button class="profile-save" type="submit">Salvar perfil</button>
+          <button class="profile-reset" id="profile-reset" type="button">Limpar dados</button>
+        </div>
+        <p class="profile-message" id="profile-message" role="status"></p>
+      </form>
+
+      <aside class="profile-note" aria-labelledby="privacy-title">
+        <p class="eyebrow">Privacidade</p>
+        <h2 id="privacy-title">Fica neste dispositivo</h2>
+        <p>Seu perfil é armazenado apenas no navegador atual. Ele não é sincronizado com o Drive, o Ollama ou qualquer serviço externo.</p>
+        <a href="/">Consultar a biblioteca</a>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const storageKey = 'arquivo-arcano-profile';
+    const profileForm = document.querySelector('#profile-form');
+    const profileName = document.querySelector('#profile-name');
+    const profileRole = document.querySelector('#profile-role');
+    const profileSystem = document.querySelector('#profile-system');
+    const profileBio = document.querySelector('#profile-bio');
+    const profileAvatar = document.querySelector('#profile-avatar');
+    const profileDisplayName = document.querySelector('#profile-display-name');
+    const profileDisplayRole = document.querySelector('#profile-display-role');
+    const profileMessage = document.querySelector('#profile-message');
+    const profileReset = document.querySelector('#profile-reset');
+
+    function initials(value) {
+      const words = value.trim().split(/\s+/).filter(Boolean);
+      if (!words.length) return 'AA';
+      return words.slice(0, 2).map((word) => word[0]).join('').toLocaleUpperCase('pt-BR');
+    }
+
+    function renderIdentity() {
+      const name = profileName.value.trim() || 'Aventureiro Arcano';
+      profileDisplayName.textContent = name;
+      profileDisplayRole.textContent = profileRole.value || 'Leitor da biblioteca';
+      profileAvatar.textContent = initials(name);
+    }
+
+    function loadProfile() {
+      try {
+        const savedProfile = JSON.parse(window.localStorage.getItem(storageKey) || '{}');
+        profileName.value = typeof savedProfile.name === 'string' ? savedProfile.name : '';
+        profileRole.value = typeof savedProfile.role === 'string' ? savedProfile.role : '';
+        profileSystem.value = typeof savedProfile.system === 'string' ? savedProfile.system : '';
+        profileBio.value = typeof savedProfile.bio === 'string' ? savedProfile.bio : '';
+      } catch (error) {
+        profileMessage.textContent = 'Não foi possível ler o perfil salvo neste navegador.';
+      }
+      renderIdentity();
+    }
+
+    profileForm.addEventListener('input', renderIdentity);
+    profileForm.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const profile = {
+        name: profileName.value.trim(),
+        role: profileRole.value,
+        system: profileSystem.value.trim(),
+        bio: profileBio.value.trim(),
+      };
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(profile));
+        profileMessage.textContent = 'Perfil salvo neste navegador.';
+      } catch (error) {
+        profileMessage.textContent = 'Não foi possível salvar o perfil neste navegador.';
+      }
+    });
+
+    profileReset.addEventListener('click', () => {
+      window.localStorage.removeItem(storageKey);
+      profileForm.reset();
+      renderIdentity();
+      profileMessage.textContent = 'Dados locais do perfil removidos.';
+    });
+
+    loadProfile();
+  </script>
+</body>
+</html>

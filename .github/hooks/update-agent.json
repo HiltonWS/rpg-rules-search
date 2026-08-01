@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python3 scripts/update_agent.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

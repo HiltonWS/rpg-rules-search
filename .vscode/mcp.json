@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "arquivo-arcano-ollama": {
+      "type": "stdio",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["-m", "rpg_rules_search.project_mcp"],
+      "env": {
+        "RPG_RULES_PROJECT_ROOT": "${workspaceFolder}"
+      }
+    }
+  }
+}
