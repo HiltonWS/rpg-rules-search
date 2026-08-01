@@ -9,7 +9,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check deployment secrets
+        if: ${{ secrets.RPI_HOST == '' || secrets.RPI_USER == '' || secrets.RPI_SSH_KEY == '' }}
+        run: |
+          echo "Skipping deployment because one or more required secrets are not configured: RPI_HOST, RPI_USER, RPI_SSH_KEY"
+          echo "Set those secrets in GitHub repository settings before enabling deployment."
+
       - name: Deploy to Raspberry Pi over SSH
+        if: ${{ secrets.RPI_HOST != '' && secrets.RPI_USER != '' && secrets.RPI_SSH_KEY != '' }}
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.RPI_HOST }}
@@ -17,18 +24,6 @@ jobs:
           key: ${{ secrets.RPI_SSH_KEY }}
           script: |
             set -euo pipefail
-            if [ -z "${{ secrets.RPI_HOST }}" ]; then
-              echo "Missing required secret: RPI_HOST" >&2
-              exit 1
-            fi
-            if [ -z "${{ secrets.RPI_USER }}" ]; then
-              echo "Missing required secret: RPI_USER" >&2
-              exit 1
-            fi
-            if [ -z "${{ secrets.RPI_SSH_KEY }}" ]; then
-              echo "Missing required secret: RPI_SSH_KEY" >&2
-              exit 1
-            fi
             export REPO_URL="${{ secrets.REPO_URL }}"
             if [ -z "$REPO_URL" ]; then
               export REPO_URL="https://github.com/${{ github.repository }}.git"
