@@ -4,13 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/rpg-rules-search
+WorkingDirectory=APP_DIRECTORY
 Environment=RPG_RULES_HOST=0.0.0.0
 Environment=RPG_RULES_PORT=8765
 Environment=RPG_RULES_RELOAD=0
 User=YOUR_USERNAME
 Group=YOUR_USERNAME
-ExecStart=/opt/rpg-rules-search/.venv/bin/python -m rpg_rules_search
+ExecStart=APP_DIRECTORY/.venv/bin/python -m rpg_rules_search
 Restart=always
 RestartSec=5
 

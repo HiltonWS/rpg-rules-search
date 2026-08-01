@@ -2,12 +2,7 @@
 
 ## 1. Preparar o Raspberry Pi
 
-```bash
-sudo apt-get update
-sudo apt-get install -y openssh-server git python3-pip python3-venv
-```
-
-Crie uma chave SSH e adicione a chave pública ao arquivo `~/.ssh/authorized_keys` do usuário `rspi5`.
+O instalador prepara as dependências, o Python 3.12 e o serviço automaticamente.
 
 ## 2. Expor a aplicação localmente
 
@@ -22,32 +17,22 @@ http://<IP-DO-RPI>:8765
 No Pi, rode:
 
 ```bash
-REPO_URL=https://github.com/<usuario>/<repositorio>.git \
-  curl -fsSL https://raw.githubusercontent.com/HiltonWS/rpg-rules-search/main/scripts/deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/HiltonWS/rpg-rules-search/main/scripts/deploy.sh | bash
 ```
 
-Ou, em um clone local do repositório:
+O script identifica o usuário conectado mesmo quando precisa usar `sudo`. Se o Pi
+estiver sendo administrado diretamente como `root` e não houver um usuário comum,
+informe-o explicitamente:
 
 ```bash
-bash scripts/deploy.sh
+curl -fsSL https://raw.githubusercontent.com/HiltonWS/rpg-rules-search/main/scripts/deploy.sh \
+  | USER_NAME=seu_usuario bash
 ```
 
-Se o URL do GitHub retornar 404, o problema é que o repositório informado não existe ou não é acessível. Nesse caso:
+Para atualizar posteriormente, execute o mesmo comando. O repositório será atualizado
+e o serviço reiniciado.
 
-- crie o repositório no GitHub e use a URL correta, ou
-- rode o script a partir de um checkout local do projeto, que ele usará automaticamente.
-
-## 4. Atualização automática via GitHub
-
-O workflow em `.github/workflows/deploy.yml` roda em cada push na branch `main` e tenta conectar ao Pi por SSH para atualizar o checkout e reiniciar o serviço.
-
-### Secrets necessários no GitHub
-
-- `RPI_HOST`
-- `RPI_USER`
-- `RPI_SSH_KEY`
-
-## 5. Segurança
+## 4. Segurança
 
 - Não exponha a porta 8765 diretamente na internet.
 - Prefira SSH tunneling para acesso remoto:

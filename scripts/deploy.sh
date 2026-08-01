@@ -2,49 +2,85 @@
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/opt/rpg-rules-search}
-REPO_URL=${REPO_URL:-}
+REPO_URL=${REPO_URL:-https://github.com/HiltonWS/rpg-rules-search.git}
 BRANCH=${BRANCH:-main}
 SERVICE_NAME=${SERVICE_NAME:-rpg-rules-search}
-USER_NAME=${USER_NAME:-$(id -un)}
+USER_NAME=${USER_NAME:-${SUDO_USER:-}}
 
-if [ -z "$REPO_URL" ]; then
-  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    REPO_URL="$(git rev-parse --show-toplevel)"
-    echo "Usando o checkout local em $REPO_URL" >&2
+if [ -z "$USER_NAME" ] || [ "$USER_NAME" = "root" ]; then
+  CURRENT_USER=$(id -un)
+  if [ "$CURRENT_USER" != "root" ]; then
+    USER_NAME=$CURRENT_USER
   else
-    echo "Defina REPO_URL com a URL real do repositório GitHub, por exemplo:" >&2
-    echo "REPO_URL=https://github.com/<usuario>/<repositorio>.git bash scripts/deploy.sh" >&2
-    echo "Ou rode o script a partir de um clone local do repositório." >&2
-    exit 1
+    USER_NAME=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 { print $1; exit }')
   fi
 fi
 
-sudo apt-get update
-sudo apt-get install -y git python3-pip python3-venv
-
-sudo mkdir -p "$APP_DIR"
-sudo chown -R "$USER_NAME:$USER_NAME" "$APP_DIR"
-
-if [ ! -d "$APP_DIR/.git" ]; then
-  git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
-else
-  cd "$APP_DIR"
-  git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL" 2>/dev/null || true
-  git fetch origin "$BRANCH" 2>/dev/null || true
-  git checkout "$BRANCH"
-  git pull --ff-only origin "$BRANCH" 2>/dev/null || true
+if [ -z "$USER_NAME" ] || [ "$USER_NAME" = "root" ] || ! id "$USER_NAME" >/dev/null 2>&1; then
+  echo "Não foi possível identificar automaticamente o usuário do Raspberry Pi." >&2
+  echo "Execute novamente com USER_NAME=seu_usuario." >&2
+  exit 1
 fi
 
-cd "$APP_DIR"
-python3 -m venv .venv
-. .venv/bin/activate
-pip install --upgrade pip
-pip install -e '.[dev]'
+USER_HOME=$(getent passwd "$USER_NAME" | cut -d: -f6)
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=()
+else
+  command -v sudo >/dev/null 2>&1 || {
+    echo "O comando sudo é necessário para instalar o serviço." >&2
+    exit 1
+  }
+  SUDO=(sudo)
+fi
 
-sudo install -m 0644 "$APP_DIR/deploy/rpg-rules-search.service" "/etc/systemd/system/$SERVICE_NAME.service"
-sudo sed -i "s|YOUR_USERNAME|$USER_NAME|g" "/etc/systemd/system/$SERVICE_NAME.service"
+run_as_user() {
+  if [ "$(id -un)" = "$USER_NAME" ]; then
+    "$@"
+  else
+    "${SUDO[@]}" -u "$USER_NAME" env HOME="$USER_HOME" "$@"
+  fi
+}
 
-sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME" || true
-sudo systemctl restart "$SERVICE_NAME"
-sudo systemctl status "$SERVICE_NAME" --no-pager || true
+echo "Instalando o Arquivo Arcano para o usuário $USER_NAME..."
+"${SUDO[@]}" apt-get update
+"${SUDO[@]}" apt-get install -y ca-certificates curl git libreoffice-writer
+
+if ! command -v uv >/dev/null 2>&1; then
+  UV_INSTALLER=$(mktemp)
+  trap 'rm -f "$UV_INSTALLER"' EXIT
+  curl -fsSL https://astral.sh/uv/install.sh -o "$UV_INSTALLER"
+  "${SUDO[@]}" env UV_INSTALL_DIR=/usr/local/bin sh "$UV_INSTALLER"
+fi
+
+"${SUDO[@]}" mkdir -p "$APP_DIR"
+"${SUDO[@]}" chown -R "$USER_NAME:$USER_NAME" "$APP_DIR"
+
+if [ ! -d "$APP_DIR/.git" ]; then
+  if [ -n "$(ls -A "$APP_DIR")" ]; then
+    echo "$APP_DIR não está vazio e não contém um repositório Git." >&2
+    exit 1
+  fi
+  run_as_user git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
+else
+  run_as_user git -C "$APP_DIR" remote set-url origin "$REPO_URL"
+  run_as_user git -C "$APP_DIR" fetch origin "$BRANCH"
+  run_as_user git -C "$APP_DIR" checkout "$BRANCH"
+  run_as_user git -C "$APP_DIR" pull --ff-only origin "$BRANCH"
+fi
+
+run_as_user uv python install 3.12
+run_as_user uv venv --python 3.12 --clear "$APP_DIR/.venv"
+run_as_user uv pip install --python "$APP_DIR/.venv/bin/python" -e "$APP_DIR"
+
+sed \
+  -e "s|APP_DIRECTORY|$APP_DIR|g" \
+  -e "s|YOUR_USERNAME|$USER_NAME|g" \
+  "$APP_DIR/deploy/rpg-rules-search.service" \
+  | "${SUDO[@]}" tee "/etc/systemd/system/$SERVICE_NAME.service" >/dev/null
+
+"${SUDO[@]}" systemctl daemon-reload
+"${SUDO[@]}" systemctl enable --now "$SERVICE_NAME"
+"${SUDO[@]}" systemctl restart "$SERVICE_NAME"
+"${SUDO[@]}" systemctl status "$SERVICE_NAME" --no-pager
+
+echo "Arquivo Arcano instalado em http://$(hostname -I | awk '{print $1}'):8765"
