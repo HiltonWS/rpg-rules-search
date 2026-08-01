@@ -23,7 +23,7 @@ No Pi, rode:
 
 ```bash
 REPO_URL=https://github.com/<usuario>/<repositorio>.git \
-  curl -fsSL https://raw.githubusercontent.com/hilton/rpg-rules-search/main/scripts/deploy.sh | bash
+  curl -fsSL https://raw.githubusercontent.com/HiltonWS/rpg-rules-search/main/scripts/deploy.sh | bash
 ```
 
 Ou, em um clone local do repositório:

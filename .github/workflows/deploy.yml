@@ -18,9 +18,9 @@ jobs:
           script: |
             export REPO_URL="${{ secrets.REPO_URL }}"
             if [ -z "$REPO_URL" ]; then
-              export REPO_URL="https://github.com/hilton/rpg-rules-search.git"
+              export REPO_URL="https://github.com/${{ github.repository }}.git"
             fi
             export BRANCH="main"
             export APP_DIR="/opt/rpg-rules-search"
             export USER_NAME="${{ secrets.RPI_USER }}"
-            curl -fsSL "https://raw.githubusercontent.com/hilton/rpg-rules-search/main/scripts/deploy.sh" | bash
+            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/deploy.sh" | bash
