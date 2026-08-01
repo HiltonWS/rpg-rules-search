@@ -16,6 +16,19 @@ jobs:
           username: ${{ secrets.RPI_USER }}
           key: ${{ secrets.RPI_SSH_KEY }}
           script: |
+            set -euo pipefail
+            if [ -z "${{ secrets.RPI_HOST }}" ]; then
+              echo "Missing required secret: RPI_HOST" >&2
+              exit 1
+            fi
+            if [ -z "${{ secrets.RPI_USER }}" ]; then
+              echo "Missing required secret: RPI_USER" >&2
+              exit 1
+            fi
+            if [ -z "${{ secrets.RPI_SSH_KEY }}" ]; then
+              echo "Missing required secret: RPI_SSH_KEY" >&2
+              exit 1
+            fi
             export REPO_URL="${{ secrets.REPO_URL }}"
             if [ -z "$REPO_URL" ]; then
               export REPO_URL="https://github.com/${{ github.repository }}.git"
@@ -23,4 +36,6 @@ jobs:
             export BRANCH="main"
             export APP_DIR="/opt/rpg-rules-search"
             export USER_NAME="${{ secrets.RPI_USER }}"
-            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/deploy.sh" | bash
+            echo "Deploying from $REPO_URL"
+            curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/deploy.sh" -o /tmp/deploy.sh
+            bash /tmp/deploy.sh
