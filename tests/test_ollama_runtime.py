@@ -53,6 +53,8 @@ def test_runtime_selects_best_installed_text_and_vision_models() -> None:
 
     assert runtime.best_model() == "text-large"
     assert runtime.best_model(require_vision=True) == "vision-large"
+    assert runtime.model_supports_vision("text-small") is False
+    assert runtime.model_supports_vision("vision-large") is True
 
 
 def test_parameter_count_parses_ollama_sizes() -> None:

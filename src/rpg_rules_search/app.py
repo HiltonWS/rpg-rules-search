@@ -330,6 +330,10 @@ def create_app(
             resolved_ollama.model,
             install_if_missing=install_if_missing,
         )
+        if hasattr(runtime, "model_supports_vision"):
+            resolved_ollama.accepts_images = runtime.model_supports_vision(
+                resolved_ollama.model
+            )
         resolved_vision_ollama.model = runtime.ensure_model(
             resolved_vision_ollama.model,
             require_vision=True,
@@ -993,6 +997,11 @@ def create_app(
         app.state.ollama_settings = settings
         resolved_ollama.base_url = settings.base_url
         resolved_ollama.model = settings.text_model
+        runtime = resolved_ollama_runtime_factory(settings.base_url)
+        if hasattr(runtime, "model_supports_vision"):
+            resolved_ollama.accepts_images = runtime.model_supports_vision(
+                settings.text_model
+            )
         resolved_vision_ollama.base_url = settings.base_url
         resolved_vision_ollama.model = settings.vision_model
         return ollama_status()

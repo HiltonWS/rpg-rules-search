@@ -112,6 +112,9 @@ class OllamaRuntime:
             ),
         ).name
 
+    def model_supports_vision(self, model: str) -> bool:
+        return "vision" in self._model_details(model)["capabilities"]
+
     def pull_model(self, model: str) -> None:
         if not self.ensure_available():
             raise OllamaRuntimeError(f"Ollama indisponível em {self.base_url}")

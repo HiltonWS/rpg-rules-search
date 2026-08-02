@@ -103,3 +103,17 @@ def test_extended_answer_uses_larger_context_and_output_budget() -> None:
         "num_ctx": 32768,
         "num_predict": 4096,
     }
+
+
+def test_text_only_client_does_not_send_images() -> None:
+    captured: dict[str, object] = {}
+
+    def transport(url: str, payload: dict[str, object], timeout: float) -> dict[str, object]:
+        captured["payload"] = payload
+        return {"message": {"content": "Resposta textual"}}
+
+    client = OllamaClient(transport=transport, accepts_images=False)
+    client.answer("Pergunta e evidências", images=[b"page image"])
+
+    messages = captured["payload"]["messages"]  # type: ignore[index]
+    assert "images" not in messages[1]

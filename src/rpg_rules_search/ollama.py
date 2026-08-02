@@ -171,18 +171,20 @@ class OllamaClient:
         timeout: float = 240.0,
         transport: Transport = _http_transport,
         system_prompt: str = RPG_RULES_PERSONA,
+        accepts_images: bool = True,
     ) -> None:
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.transport = transport
         self.system_prompt = system_prompt
+        self.accepts_images = accepts_images
 
     def answer(
         self, prompt: str, images: list[bytes] | None = None, *, extended: bool = False
     ) -> str:
         user_message: dict[str, object] = {"role": "user", "content": prompt}
-        if images:
+        if images and self.accepts_images:
             user_message["images"] = [b64encode(image).decode("ascii") for image in images]
         response = self.transport(
             f"{self.base_url}/api/chat",
