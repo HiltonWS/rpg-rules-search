@@ -45,9 +45,37 @@ echo "Instalando o Arquivo Arcano para o usuário $USER_NAME..."
 "${SUDO[@]}" apt-get update
 "${SUDO[@]}" apt-get install -y ca-certificates curl git libreoffice-writer
 
+if ! command -v ollama >/dev/null 2>&1; then
+  OLLAMA_INSTALLER=$(mktemp)
+  trap 'rm -f "${UV_INSTALLER:-}" "${OLLAMA_INSTALLER:-}"' EXIT
+  curl -fsSL https://ollama.com/install.sh -o "$OLLAMA_INSTALLER"
+  "${SUDO[@]}" sh "$OLLAMA_INSTALLER"
+fi
+
+"${SUDO[@]}" mkdir -p /etc/systemd/system/ollama.service.d
+"${SUDO[@]}" tee /etc/systemd/system/ollama.service.d/arquivo-arcano.conf >/dev/null <<'EOF'
+[Service]
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+Restart=always
+RestartSec=5
+EOF
+"${SUDO[@]}" systemctl daemon-reload
+"${SUDO[@]}" systemctl enable --now ollama
+"${SUDO[@]}" systemctl restart ollama
+if ! curl --retry 10 --retry-all-errors --retry-delay 1 --fail --silent \
+  http://127.0.0.1:11434/api/tags >/dev/null; then
+  echo "O Ollama não respondeu em http://127.0.0.1:11434." >&2
+  "${SUDO[@]}" systemctl status ollama --no-pager >&2 || true
+  exit 1
+fi
+if ! run_as_user ollama show gemma3:1b >/dev/null 2>&1; then
+  echo "Baixando o modelo de texto gemma3:1b..."
+  run_as_user ollama pull gemma3:1b
+fi
+
 if ! command -v uv >/dev/null 2>&1; then
   UV_INSTALLER=$(mktemp)
-  trap 'rm -f "$UV_INSTALLER"' EXIT
+  trap 'rm -f "${UV_INSTALLER:-}" "${OLLAMA_INSTALLER:-}"' EXIT
   curl -fsSL https://astral.sh/uv/install.sh -o "$UV_INSTALLER"
   "${SUDO[@]}" env UV_INSTALL_DIR=/usr/local/bin sh "$UV_INSTALLER"
 fi
@@ -78,8 +106,21 @@ sed \
   "$APP_DIR/deploy/rpg-rules-search.service" \
   | "${SUDO[@]}" tee "/etc/systemd/system/$SERVICE_NAME.service" >/dev/null
 
+sed \
+  -e "s|APP_DIRECTORY|$APP_DIR|g" \
+  -e "s|YOUR_USERNAME|$USER_NAME|g" \
+  -e "s|SERVICE_NAME_PLACEHOLDER|$SERVICE_NAME|g" \
+  "$APP_DIR/deploy/rpg-rules-search-update.service" \
+  | "${SUDO[@]}" tee "/etc/systemd/system/$SERVICE_NAME-update.service" >/dev/null
+
+sed \
+  -e "s|SERVICE_NAME_PLACEHOLDER|$SERVICE_NAME|g" \
+  "$APP_DIR/deploy/rpg-rules-search-update.timer" \
+  | "${SUDO[@]}" tee "/etc/systemd/system/$SERVICE_NAME-update.timer" >/dev/null
+
 "${SUDO[@]}" systemctl daemon-reload
 "${SUDO[@]}" systemctl enable --now "$SERVICE_NAME"
+"${SUDO[@]}" systemctl enable --now "$SERVICE_NAME-update.timer"
 "${SUDO[@]}" systemctl restart "$SERVICE_NAME"
 "${SUDO[@]}" systemctl status "$SERVICE_NAME" --no-pager
 

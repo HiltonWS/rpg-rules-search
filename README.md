@@ -41,6 +41,25 @@ No ambiente atual, as dependências Python principais já estão disponíveis e 
 PYTHONPATH=src python3 -m rpg_rules_search
 ```
 
+## Raspberry Pi
+
+O instalador do Raspberry Pi configura o Arquivo Arcano e o Ollama como serviços
+do systemd. O Ollama inicia automaticamente no boot, reinicia após falhas e aceita
+conexões somente em `127.0.0.1:11434`. Um servidor Ollama remoto é usado apenas
+quando configurado explicitamente pela interface.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HiltonWS/rpg-rules-search/main/scripts/deploy.sh | bash
+```
+
+O instalador também habilita uma verificação do GitHub a cada 15 minutos. Quando
+há um novo commit em `origin/main`, o Pi atualiza as dependências e units, garante
+que o Ollama esteja ativo e reinicia a aplicação. Alterações locais ou histórico
+divergente bloqueiam a atualização automática para evitar perda de trabalho.
+
+Consulte [DEPLOYMENT.md](DEPLOYMENT.md) para configuração de rede, OAuth por túnel
+SSH, atualização manual, estado dos serviços e diagnóstico por logs.
+
 ## Testes
 
 ```bash

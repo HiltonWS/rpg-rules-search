@@ -1,0 +1,12 @@
+[Unit]
+Description=Atualização automática do Arquivo Arcano
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=APP_DIRECTORY
+Environment=BRANCH=main
+Environment=SERVICE_NAME=SERVICE_NAME_PLACEHOLDER
+Environment=USER_NAME=YOUR_USERNAME
+ExecStart=/usr/bin/bash APP_DIRECTORY/scripts/update_pi.sh

@@ -1,0 +1,12 @@
+[Unit]
+Description=Verifica atualizações do Arquivo Arcano no GitHub
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=2min
+Persistent=true
+Unit=SERVICE_NAME_PLACEHOLDER-update.service
+
+[Install]
+WantedBy=timers.target
