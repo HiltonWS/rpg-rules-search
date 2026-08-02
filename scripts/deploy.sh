@@ -62,10 +62,12 @@ EOF
 "${SUDO[@]}" systemctl daemon-reload
 "${SUDO[@]}" systemctl enable --now ollama
 "${SUDO[@]}" systemctl restart ollama
-if ! curl --retry 10 --retry-all-errors --retry-delay 1 --fail --silent \
+if ! curl --noproxy '*' --retry 60 --retry-all-errors --retry-delay 1 --retry-max-time 60 \
+  --connect-timeout 2 --max-time 5 --fail --silent \
   http://127.0.0.1:11434/api/tags >/dev/null; then
-  echo "O Ollama não respondeu em http://127.0.0.1:11434." >&2
+  echo "O Ollama não respondeu em http://127.0.0.1:11434 após 60 segundos." >&2
   "${SUDO[@]}" systemctl status ollama --no-pager >&2 || true
+  "${SUDO[@]}" journalctl -u ollama -n 50 --no-pager >&2 || true
   exit 1
 fi
 if ! run_as_user ollama show gemma3:1b >/dev/null 2>&1; then

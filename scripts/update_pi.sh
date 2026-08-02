@@ -81,10 +81,12 @@ EOF
 systemctl daemon-reload
 systemctl enable --now ollama.service
 systemctl restart ollama.service
-if ! curl --retry 10 --retry-all-errors --retry-delay 1 --fail --silent \
+if ! curl --noproxy '*' --retry 60 --retry-all-errors --retry-delay 1 --retry-max-time 60 \
+  --connect-timeout 2 --max-time 5 --fail --silent \
   http://127.0.0.1:11434/api/tags >/dev/null; then
-  echo "O Ollama não respondeu em http://127.0.0.1:11434." >&2
+  echo "O Ollama não respondeu em http://127.0.0.1:11434 após 60 segundos." >&2
   systemctl status ollama.service --no-pager >&2 || true
+  journalctl -u ollama.service -n 50 --no-pager >&2 || true
   exit 1
 fi
 systemctl enable --now "$SERVICE_NAME-update.timer"
