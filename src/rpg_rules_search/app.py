@@ -17,7 +17,16 @@ from threading import Lock
 from typing import Any
 
 import fitz
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -62,6 +71,7 @@ from rpg_rules_search.ollama import (
     OllamaClient,
     OllamaUnavailableError,
     build_evidence_prompt,
+    build_expanded_retrieval_query,
     build_retrieval_query,
     suggest_image_tags,
 )
@@ -322,6 +332,23 @@ def create_app(
         ),
         cooldown_seconds=image_auto_tag_cooldown_seconds,
     )
+    query_expansion_cache: dict[str, list[str]] = {}
+    pending_query_expansions: set[str] = set()
+    query_expansion_lock = Lock()
+
+    def cache_query_expansion(query: str, cache_key: str) -> None:
+        suggest_terms = getattr(resolved_ollama, "suggest_retrieval_terms", None)
+        try:
+            suggestions = suggest_terms(query) if callable(suggest_terms) else []
+        except OllamaUnavailableError:
+            suggestions = []
+        with query_expansion_lock:
+            pending_query_expansions.discard(cache_key)
+            if not suggestions:
+                return
+            query_expansion_cache[cache_key] = suggestions
+            if len(query_expansion_cache) > 256:
+                del query_expansion_cache[next(iter(query_expansion_cache))]
 
     def configure_ollama() -> None:
         runtime = resolved_ollama_runtime_factory(resolved_ollama.base_url)
@@ -477,6 +504,41 @@ def create_app(
         finally:
             connection.close()
 
+    def expand_search_results(
+        connection: sqlite3.Connection,
+        query: str,
+        results: list[SearchResult],
+        limit: int,
+        background_tasks: BackgroundTasks,
+    ) -> list[SearchResult]:
+        suggest_terms = getattr(resolved_ollama, "suggest_retrieval_terms", None)
+        if not callable(suggest_terms):
+            return results
+        cache_key = " ".join(query.casefold().split())
+        with query_expansion_lock:
+            suggestions = query_expansion_cache.get(cache_key)
+            if suggestions is None and cache_key not in pending_query_expansions:
+                pending_query_expansions.add(cache_key)
+                background_tasks.add_task(cache_query_expansion, query, cache_key)
+        if suggestions is None:
+            return results
+        try:
+            expanded_query = build_expanded_retrieval_query(query, suggestions)
+            expanded_results = search(connection, expanded_query, limit) if expanded_query else []
+        except sqlite3.OperationalError:
+            return results
+        merged: list[SearchResult] = []
+        seen: set[tuple[int, int]] = set()
+        for result in [*results, *expanded_results]:
+            key = (result.document_id, result.page_index)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(result)
+            if len(merged) >= limit:
+                break
+        return merged
+
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> HTMLResponse:
         return templates.TemplateResponse(request=request, name="index.html")
@@ -487,6 +549,7 @@ def create_app(
 
     @app.get("/api/search", response_model=SearchResponse)
     def search_api(
+        background_tasks: BackgroundTasks,
         q: str = Query(min_length=2, max_length=300),
         limit: int = Query(default=20, ge=1, le=100),
         connection: sqlite3.Connection = Depends(database),
@@ -495,6 +558,7 @@ def create_app(
             results = search(connection, q, limit)
         except sqlite3.OperationalError as error:
             raise HTTPException(status_code=400, detail="Consulta de busca inválida") from error
+        results = expand_search_results(connection, q, results, limit, background_tasks)
         record_query_activity(connection, "search", q)
         return SearchResponse(query=q, results=results)
 
@@ -925,6 +989,7 @@ def create_app(
 
     @app.get("/api/ask", response_model=QuestionResponse)
     def ask_api(
+        background_tasks: BackgroundTasks,
         q: str = Query(min_length=3, max_length=500),
         extended: bool = Query(default=False),
         connection: sqlite3.Connection = Depends(database),
@@ -932,6 +997,7 @@ def create_app(
         record_query_activity(connection, "question", q)
         retrieval_query = build_retrieval_query(q)
         sources = search(connection, retrieval_query, limit=8) if retrieval_query else []
+        sources = expand_search_results(connection, q, sources, 8, background_tasks)
         if not sources:
             return QuestionResponse(
                 question=q,
@@ -995,6 +1061,9 @@ def create_app(
     def update_ollama_api(settings: OllamaSettings) -> OllamaStatus:
         save_ollama_settings(app.state.ollama_settings_path, settings)
         app.state.ollama_settings = settings
+        with query_expansion_lock:
+            query_expansion_cache.clear()
+            pending_query_expansions.clear()
         resolved_ollama.base_url = settings.base_url
         resolved_ollama.model = settings.text_model
         runtime = resolved_ollama_runtime_factory(settings.base_url)

@@ -114,6 +114,13 @@ O modo **Pergunta** recupera até oito páginas pelo FTS5 e só então envia ess
 
 O modo Pergunta usa somente páginas recuperadas dos livros. A aplicação não possui modo de ensinamento nem persiste contexto fornecido em perguntas.
 
+Nas buscas e perguntas, o Ollama também prepara em background termos curtos e
+sinônimos para ampliar recuperações futuras da mesma consulta. O FTS5 responde
+imediatamente e continua sendo a fonte dos resultados; se o modelo estiver
+indisponível, a busca original permanece inalterada. As expansões ficam somente
+em memória, limitadas às 256 consultas mais recentes, e são descartadas ao
+reiniciar a aplicação ou trocar a configuração do Ollama.
+
 ## Agente do projeto
 
 O agente de workspace fica em `.github/agents/arquivo-arcano.agent.md`. Ele é gerado a partir de `.github/copilot-instructions.md` por `scripts/update_agent.py`; o hook `.github/hooks/update-agent.json` executa essa atualização no início de cada sessão de agente do VS Code.

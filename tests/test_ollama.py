@@ -2,6 +2,7 @@ from rpg_rules_search.database import SearchResult
 from rpg_rules_search.ollama import (
     OllamaClient,
     build_evidence_prompt,
+    build_expanded_retrieval_query,
     build_retrieval_query,
 )
 
@@ -10,6 +11,14 @@ def test_retrieval_query_removes_portuguese_stopwords() -> None:
     query = build_retrieval_query("O que é profundezas na homebrew?")
 
     assert query == '"profundezas" AND "homebrew"'
+
+
+def test_expanded_retrieval_query_combines_original_and_suggested_terms() -> None:
+    query = build_expanded_retrieval_query(
+        "Como recuperar vida?", ["cura", "pontos de vida", "restauração"]
+    )
+
+    assert query == '"recuperar" OR "vida" OR "cura" OR "pontos vida" OR "restauração"'
 
 
 def test_evidence_prompt_contains_page_citations_and_rejects_unsupported_answers() -> None:
@@ -117,3 +126,21 @@ def test_text_only_client_does_not_send_images() -> None:
 
     messages = captured["payload"]["messages"]  # type: ignore[index]
     assert "images" not in messages[1]
+
+
+def test_ollama_client_suggests_short_retrieval_terms() -> None:
+    captured: dict[str, object] = {}
+
+    def transport(url: str, payload: dict[str, object], timeout: float) -> dict[str, object]:
+        captured.update(payload=payload, timeout=timeout)
+        return {"message": {"content": "cura, pontos de vida, restauração, cura"}}
+
+    client = OllamaClient(transport=transport)
+
+    assert client.suggest_retrieval_terms("Como recuperar vida?") == [
+        "cura",
+        "pontos de vida",
+        "restauração",
+    ]
+    assert captured["timeout"] == 30.0
+    assert captured["payload"]["options"]["num_predict"] == 96  # type: ignore[index]

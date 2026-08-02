@@ -43,6 +43,27 @@ def build_retrieval_query(question: str) -> str:
     return " AND ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in unique_terms)
 
 
+def build_expanded_retrieval_query(question: str, suggestions: list[str]) -> str:
+    candidates = re.findall(r"[\wÀ-ÿ]+", question, flags=re.UNICODE)
+    candidates.extend(suggestions)
+    terms: list[str] = []
+    for candidate in candidates:
+        words = re.findall(r"[\wÀ-ÿ]+", candidate, flags=re.UNICODE)[:4]
+        useful_words = [
+            word
+            for word in words
+            if len(word) >= 3 and word.casefold() not in _PORTUGUESE_STOPWORDS
+        ]
+        if not useful_words:
+            continue
+        term = " ".join(useful_words).casefold()
+        if term not in terms:
+            terms.append(term)
+        if len(terms) >= 12:
+            break
+    return " OR ".join(f'"{term.replace(chr(34), chr(34) * 2)}"' for term in terms)
+
+
 def _evidence_passage(question: str, text: str) -> str:
     clean_text = re.sub(r"\s+", " ", text).strip()
     if len(clean_text) <= _MAX_EVIDENCE_CHARS:
@@ -179,6 +200,34 @@ class OllamaClient:
         self.transport = transport
         self.system_prompt = system_prompt
         self.accepts_images = accepts_images
+
+    def suggest_retrieval_terms(self, query: str, *, max_terms: int = 8) -> list[str]:
+        response = self.transport(
+            f"{self.base_url}/api/chat",
+            {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Você otimiza buscas em livros de RPG. Retorne somente termos ou "
+                            "expressões curtas em português, separados por vírgula. Não responda "
+                            "à pergunta e não explique. Inclua sinônimos e variantes úteis."
+                        ),
+                    },
+                    {"role": "user", "content": query},
+                ],
+                "stream": False,
+                "options": {"temperature": 0, "num_ctx": 2048, "num_predict": 96},
+            },
+            min(self.timeout, 30.0),
+        )
+        message = response.get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+            raise OllamaUnavailableError("O Ollama retornou uma expansão de busca inválida")
+        candidates = re.split(r"[,;\n]+", str(message["content"]))
+        terms = [" ".join(candidate.strip().split()) for candidate in candidates]
+        return list(dict.fromkeys(term for term in terms if term))[:max_terms]
 
     def answer(
         self, prompt: str, images: list[bytes] | None = None, *, extended: bool = False
